@@ -1,5 +1,20 @@
 __author__ = 'Ted Xie'
 
+######################################################################################################################
+#
+#                                               STM32F4 Bootloader
+#                                               (c) 2014 Ted Xie
+#
+#
+#                           A simple, lightweight bootloader for the STM32F4 platform
+#                               with an even simpler GUI or command-line-interface.
+#
+#                           Implements the protocol specified in STMicroelectronics'
+#                                               AN2606 manual:
+#   http://www.st.com/st-web-ui/static/active/en/resource/technical/document/application_note/CD00167594.pdf
+######################################################################################################################
+
+
 import serial
 import os
 from Tkinter import *
@@ -12,16 +27,23 @@ class CommandHandler (object):
     def __init__(self):
         self.last5Commands = []
         self.numCommandsLogged = 0
+        self.selectedFilePath = ""
+        self.flashReadWriter = FlashMemoryRW()
         self.pwd = os.getcwd()
-        os.chdir(self.pwd)
 
         self.availableCommands = []
         self.availableCommands.append("choose")
         self.availableCommands.append("cd")
+        self.availableCommands.append("comread")
+        self.availableCommands.append("comsetup")
+        self.availableCommands.append("comterminate")
+        self.availableCommands.append("comwrite")
+        self.availableCommands.append("flash")
         self.availableCommands.append("help")
         self.availableCommands.append("history")
         self.availableCommands.append("ls")
         self.availableCommands.append("quit")
+        self.availableCommands.append("reset")
         self.flag()
 
     def log(self, cmd):
@@ -33,16 +55,17 @@ class CommandHandler (object):
             self.last5Commands.append(cmd)
 
     def flag(self):
-        print self.pwd + ">",
-        cmd = raw_input()
-        self.log (cmd)
-        self.parse(cmd)
+        while True:
+            print self.pwd + ">",
+            cmd = raw_input()
+            self.log (cmd)
+            self.parse(cmd)
 
     def parse(self, lineIn):
         splitCmds = lineIn.split()
         if self.availableCommands.count(splitCmds[0]) == 0:
             print "ERROR: ", splitCmds[0], " is not a valid command."
-            self.flag()
+
         else:
             self.handle(splitCmds[0], splitCmds)
 
@@ -51,6 +74,16 @@ class CommandHandler (object):
             self.chooseHandler(args)
         if lineIn == "cd":
             self.cdHandler(args)
+        if lineIn == "comterminate":
+            self.flashReadWriter.close()
+        if lineIn == "comread":
+            self.comRead()
+        if lineIn == "comsetup":
+            self.comSetup()
+        if lineIn == "comwrite":
+            self.comWrite()
+        if lineIn == "flash":
+            self.flash()
         if lineIn == "help":
             self.helpHandler(args)
         if lineIn == "history":
@@ -59,40 +92,68 @@ class CommandHandler (object):
             self.lsHandler(args)
         if lineIn == "quit":
             self.quitHandler(args)
+        if lineIn == "reset":
+            self.__init__()
 
     def chooseHandler(self, args):
-        return
+        fullPath = self.pwd + "\\" + args[1]
+        if os.path.isfile(fullPath):
+            self.selectedFilePath = fullPath
+            print "File " + fullPath + " chosen."
+        else:
+            print "Not a valid file: " + fullPath
 
     def cdHandler(self, args):
         if len(args) == 1:
             print self.pwd
+            return True
         else:
             if args[1] in os.listdir(self.pwd):
                 self.pwd += args[1]
+                self.pwd += "\\"
                 os.chdir(self.pwd)
-                self.flag()
-                return True
-            else:
-                if args[1] == ".." or args[1] == "../" or args[1] == "..\\":
-                    tempArr = self.pwd.split('\\')
-                    self.pwd = ""
 
-                    for i in range(len(tempArr) - 1):
-                        self.pwd += tempArr[i]
-                        self.pwd += "\\"
-                    self.pwd = self.pwd[:-1]
-                    os.chdir(self.pwd)
-                    self.flag()
+                return True
+            if os.path.isdir(args[1]):
+                if args[1] == ".." or args[1] == "../" or args[1] == "..\\":
+                    os.chdir(args[1])
+                    self.pwd = os.getcwd()
                     return True
-                else:
-                    print "No such file or directory: ", args[1]
-                    self.flag()
-                    return False
-        self.flag()
+
+
+                strList = list(args[1])
+                for i in xrange(len(args[1])):
+                    if args[1][i] == '/':
+                        strList[i] = '\\'
+
+                newPath = "".join(strList)
+                self.pwd = newPath
+                os.chdir(self.pwd)
+
+                return True
+
+            else:
+                print "No such file or directory: ", args[1]
+
+                return False
+
+    def comRead(self):
+        return
+
+    def comSetup(self):
+        self.flashReadWriter.scanAndPrint()
+        setupPort = raw_input("Choose a serial port: ")
+        self.flashReadWriter.initComPort(setupPort)
+
+    def comWrite(self):
+        return
+
+    def flash(self):
+        return
 
     def helpHandler(self, args):
         print "Help screen goes here"
-        self.flag()
+
 
     def historyHandler(self, args):
         if (len(args) == 1) or (args[1] == "-l"):
@@ -108,7 +169,7 @@ class CommandHandler (object):
                 self.last5Commands = []
                 self.numCommandsLogged = 0
 
-        self.flag()
+
 
     def lsHandler(self, args):
         direcListing = os.listdir(self.pwd)
@@ -134,19 +195,12 @@ class CommandHandler (object):
         else:
             print "\t",
             print "\n\t".join(direcListing)
-            self.flag()
-        self.flag()
+
+
 
     def quitHandler(self, args):
-        return
-
-    def removeCommandFromHistory(self, cmd):
-        if self.last5Commands.count(cmd) == 0:
-            print "No such command in command history"
-            return False
-        else:
-            self.last5Commands.remove(cmd)
-            self.numCommandsLogged -= 1
+        print "Bye"
+        exit(1)
 
 class color:
    PURPLE = '\033[95m'
@@ -161,9 +215,8 @@ class color:
    END = '\033[0m'
 
 class FlashMemoryRW (object):
-    def __init__(self, serialPort_):
+    def __init__(self):
         self.ser = serial.Serial()
-        self.serialPort = serialPort_
 
     def scanAndPrint(self):
         available = []
@@ -179,11 +232,12 @@ class FlashMemoryRW (object):
         for s in available:
             print "Number: ", s[0], " Name: ", s[1]
 
-    def initComPort(self):
+    def initComPort(self, portNum):
         self.ser.setBaudrate(9600)
         self.ser.setParity(serial.PARITY_NONE)
-        self.ser.setPort(self.serialPort)
+        self.ser.setPort(portNum)
         self.ser.writeTimeout = 0
+        self.ser.timeout = 2
 
         if self.ser.isOpen():
             return None
@@ -216,6 +270,6 @@ class FlashMemoryRW (object):
 
 
 if __name__ == "__main__":
-    cmd = CommandHandler()
+    CommandHandler()
 
     exit(1)
