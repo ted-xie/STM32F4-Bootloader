@@ -12,7 +12,7 @@ class CommandHandler (object):
     def __init__(self):
         self.last5Commands = []
         self.numCommandsLogged = 0
-        self.pwd = "C:/"
+        self.pwd = os.getcwd()
         os.chdir(self.pwd)
 
         self.availableCommands = []
@@ -33,14 +33,16 @@ class CommandHandler (object):
             self.last5Commands.append(cmd)
 
     def flag(self):
-        print self.pwd, ">",
+        print self.pwd + ">",
         cmd = raw_input()
+        self.log (cmd)
         self.parse(cmd)
 
     def parse(self, lineIn):
         splitCmds = lineIn.split()
         if self.availableCommands.count(splitCmds[0]) == 0:
             print "ERROR: ", splitCmds[0], " is not a valid command."
+            self.flag()
         else:
             self.handle(splitCmds[0], splitCmds)
 
@@ -67,19 +69,18 @@ class CommandHandler (object):
         else:
             if args[1] in os.listdir(self.pwd):
                 self.pwd += args[1]
-                self.pwd += "/"
                 os.chdir(self.pwd)
                 self.flag()
                 return True
             else:
                 if args[1] == ".." or args[1] == "../" or args[1] == "..\\":
-                    self.pwd = self.pwd[:-2]
-                    tempArr = self.pwd.split('/')
+                    tempArr = self.pwd.split('\\')
                     self.pwd = ""
 
                     for i in range(len(tempArr) - 1):
                         self.pwd += tempArr[i]
-                        self.pwd += "/"
+                        self.pwd += "\\"
+                    self.pwd = self.pwd[:-1]
                     os.chdir(self.pwd)
                     self.flag()
                     return True
@@ -96,24 +97,31 @@ class CommandHandler (object):
     def historyHandler(self, args):
         if (len(args) == 1) or (args[1] == "-l"):
             for cmd in self.last5Commands:
-                print cmd
+                print "\t" + cmd
         else:
             if args[1] == "-r":
-                if args[2] in self.last5Commands:
-                    self.last5Commands.remove(args[2])
-                    self.numCommandsLogged -= 1
+                if len(args) >= 3:
+                    if args[2] in self.last5Commands:
+                        self.last5Commands.remove(args[2])
+                        self.numCommandsLogged -= 1
             if args[1] == "-c":
-                for s in self.last5Commands:
-                    self.last5Commands.remove(s)
-                    self.numCommandsLogged = 0
+                self.last5Commands = []
+                self.numCommandsLogged = 0
 
         self.flag()
 
     def lsHandler(self, args):
         direcListing = os.listdir(self.pwd)
+
+        for i in range(len(direcListing)):
+            if os.path.isdir(self.pwd + "\\" + direcListing[i]) == True:
+                direcListing[i] = color.BLUE + direcListing[i]
+                direcListing[i] += color.END
+
         if len(args) == 1:
             printIndex = 0
             direcListing.insert(0, "")
+
             for s in direcListing:
                 if printIndex < 8:
                     print s,
@@ -139,6 +147,18 @@ class CommandHandler (object):
         else:
             self.last5Commands.remove(cmd)
             self.numCommandsLogged -= 1
+
+class color:
+   PURPLE = '\033[95m'
+   CYAN = '\033[96m'
+   DARKCYAN = '\033[36m'
+   BLUE = '\033[94m'
+   GREEN = '\033[92m'
+   YELLOW = '\033[93m'
+   RED = '\033[91m'
+   BOLD = '\033[1m'
+   UNDERLINE = '\033[4m'
+   END = '\033[0m'
 
 class FlashMemoryRW (object):
     def __init__(self, serialPort_):
