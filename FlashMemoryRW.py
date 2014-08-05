@@ -40,11 +40,37 @@ class FlashMemoryRW (object):
             self.availablePorts.append(s[1])
 
     def initComPort(self, portNum):
+        # USART configuration:
+        # 9600 baud, 8 bits, even parity, 1 stop bit
         self.ser.setBaudrate(9600)
-        self.ser.setParity(serial.PARITY_NONE)
+        self.ser.setParity(serial.PARITY_EVEN)
         self.ser.setPort(portNum)
-        self.ser.writeTimeout = 0
+        self.ser.setStopbits(serial.STOPBITS_ONE)
+        self.ser.writeTimeout = 2
         self.ser.timeout = 2
+
+        # Buffers
+        self.rxBuff = []
+        self.txBuff = []
+
+        # Command hex values
+        self.GETCMD = 0x00
+        self.GETVER_RPS = 0x01 # Get version and read protection status
+        self.GETID = 0x02
+        self.RDMEM = 0x11 # Read memory
+        self.GOCMD = 0x21 # Go command
+        self.WRMEM = 0x31 # Write memory
+        self.ERASE = 0x43 # Erase memory
+        self.WRPR = 0x63 # Write protect
+        self.WRUP = 0x74 # Write unprotect
+        self.RDOPR = 0x82 # Readout protect
+        self.RDOUP = 0x92 # Readout unprotect
+
+
+        # Constants
+        self.ACK = [0x79]
+        self.NACK = [0x1F]
+        self.BOOTLOADER_VERSION = 0x00
 
         if self.ser.isOpen():
             return
@@ -52,6 +78,14 @@ class FlashMemoryRW (object):
         self.ser.open()
         if self.ser.isOpen():
             print self.ser.name, " is now ready."
+            self.ser.write([0x7F])
+
+            self.rxBuff = []
+            self.rxBuff.append(ord(self.ser.read(1)))
+            if cmp(self.rxBuff, self.ACK) != 0:
+                print "Error with USART connection timing."
+                return
+            print self.ser.name, " is ready for bootloading."
             return True
         else:
             return False
@@ -60,6 +94,13 @@ class FlashMemoryRW (object):
         print "Writing data..."
 
         if os.path.isfile(data):
+            self.ser.write(self.ACK)
+            self.rxBuff = self.ser.read(1)
+            print "ACK: ", self.rxBuff
+            if self.rxBuff[0] != 0x79:
+                print "No acknowledge signal received."
+                return
+
             tempFile = open(data, "rb").read()
             self.ser.write(tempFile)
         else:
@@ -67,6 +108,76 @@ class FlashMemoryRW (object):
                 self.ser.write(data[i])
 
         print ""
+
+    def flash(self, file):
+        print "Flashing STM32..."
+
+        if os.path.isfile(file) or os.path.isfile(os.getcwd() + "\\" + file):
+            pass
+        else:
+            print "Not a valid file: " + file
+
+        print "File " + file + " written successfully to STM32!"
+
+    def bootGET(self):
+        self.ser.write([0x00])
+        self.ser.write([0xFF])
+
+        self.rxBuff = []
+        self.rxBuff.append(ord(self.ser.read(1)))
+        if cmp(self.rxBuff, self.ACK) != 0 and cmp (self.rxBuff, self.NACK) != 0: # did not receive ACK or NACK
+            self.ser.write(self.NACK) # send NACK
+            print "Did not receive an ACK or NACK, sending NACK now."
+            return
+        else:
+            numBytes = ord(self.ser.read(1)) + 1
+            if numBytes < 11:
+                print "Wrong number of bytes received. Needed 12, got ", numBytes
+                return
+
+            bytesReceived = self.ser.read(numBytes)
+
+            self.BOOTLOADER_VERSION = ord(bytesReceived[0])
+            self.GETCMD = ord(bytesReceived[1])
+            self.GETVER_RPS = ord(bytesReceived[2])
+            self.GETID = ord(bytesReceived[3])
+            self.RDMEM = ord(bytesReceived[4])
+            self.GOCMD = ord(bytesReceived[5])
+            self.WRMEM = ord(bytesReceived[6])
+            self.ERASE = ord(bytesReceived[7])
+            self.WRPR = ord(bytesReceived[8])
+            self.WRUP = ord(bytesReceived[9])
+            self.RDOPR = ord(bytesReceived[10])
+            self.RDOUP = ord(bytesReceived[11])
+
+            rxByte = ord(self.ser.read(1))
+
+            if rxByte == self.ACK[0]:
+                print "========================="
+                print "Bootloader GET successful.\n"
+                print "Get command: 0x%02x" % self.GETCMD
+                print "Get Version and Read Protection Status: 0x%02x" % self.GETVER_RPS
+                print "Get ID: 0x%02x" % self.GETID
+                print "Read Memory command: 0x%02x" % self.RDMEM
+                print "Go command: 0x%02x" % self.GOCMD
+                print "Write Memory command: 0x%02x" % self.WRMEM
+                if self.ERASE == 0x43:
+                    print "Erase command: 0x%02x" % self.ERASE
+                else:
+                    if self.ERASE == 0x44:
+                        print "Extended Erase command: 0x%02x" % self.ERASE
+                    else:
+                        print "Invalid erase command: 0x%02x" % self.ERASE
+                print "Write Protect command: 0x%02x" % self.WRPR
+                print "Write Unprotect command: 0x%02x" % self.WRUP
+                print "Readout Protect command: 0x%02x" % self.RDOPR
+                print "Readout Unprotect command: 0x%02x" % self.RDOUP
+
+                return
+            else:
+                print "Bootloader GET unsuccessful: did not receive final ACK"
+
+        print "GET command done."
 
     def receiveData(self, dataLength):
         return self.ser.read(dataLength)

@@ -26,6 +26,7 @@ class CommandHandler (object):
         self.pwd = os.getcwd()
 
         self.availableCommands = []
+        self.availableCommands.append("bootGET")
         self.availableCommands.append("choose")
         self.availableCommands.append("cd")
         self.availableCommands.append("comread")
@@ -64,6 +65,8 @@ class CommandHandler (object):
             self.handle(splitCmds[0], splitCmds)
 
     def handle(self, lineIn, args):
+        if lineIn == "bootGET":
+            self.flashReadWriter.bootGET()
         if lineIn == "choose":
             self.chooseHandler(args)
         if lineIn == "cd":
@@ -104,8 +107,8 @@ class CommandHandler (object):
             return True
         else:
             if args[1] in os.listdir(self.pwd):
-                self.pwd += args[1]
                 self.pwd += "\\"
+                self.pwd += args[1]
                 os.chdir(self.pwd)
 
                 return True
