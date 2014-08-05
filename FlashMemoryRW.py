@@ -187,6 +187,56 @@ class FlashMemoryRW (object):
                 print "Bootloader GET unsuccessful: did not receive final ACK"
 
         print "GET command done."
+        self.bootREAD()
+
+    def bootREAD(self):
+        if self.ser.isOpen() == False:
+            print "Must initialize serial connection first."
+            return
+
+        self.txBuff = []
+        self.txBuff.append(self.WRMEM)
+        self.txBuff.append(0xEE)
+        self.ser.write(self.txBuff)
+        self.txBuff = []
+        rxin = self.ser.read(1)
+
+        while len(rxin) == 0:
+            rxin = self.ser.read(1)
+
+        if ord(rxin) != self.ACK[0]:
+            print "No ACK received for boot READ: address not yet sent."
+            return
+
+
+        startAddr = [0x08, 0x0E, 0x00, 0x00]
+        self.ser.write(startAddr)
+        chk = [0x08 ^ 0x0E ^ 0x00 ^ 0x00]
+        self.ser.write(chk)
+
+        while len(rxin) == 0:
+            rxin = self.ser.read(1)
+
+        if ord(rxin) != self.ACK[0]:
+            print "No ACK received for boot READ: address already sent."
+            return
+
+        self.ser.write([255]) # 128 kB - read the whole sector 11
+        self.ser.write([0]) # complement of 128 kB
+
+        self.txBuff = self.ser.read(255)
+
+        printIndex = 0
+        for i in xrange(len(self.txBuff)):
+            if printIndex < 16:
+                print "%x" % ord(self.txBuff[i]),
+                printIndex += 1
+            else:
+                print ""
+                print "%x" % ord(self.txBuff[i]),
+                printIndex = 1
+
+        print ""
 
     def receiveData(self, dataLength):
         return self.ser.read(dataLength)
