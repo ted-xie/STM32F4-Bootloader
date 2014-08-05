@@ -66,11 +66,13 @@ class FlashMemoryRW (object):
         self.RDOPR = 0x82 # Readout protect
         self.RDOUP = 0x92 # Readout unprotect
 
-
         # Constants
         self.ACK = [0x79]
         self.NACK = [0x1F]
         self.BOOTLOADER_VERSION = 0x00
+        self.FLASH_SECTORS = [0x08000000, 0x08004000, 0x08008000, 0x0800C000, 0x08010000,
+                              0x08020000, 0x08040000, 0x08060000, 0x08080000, 0x080A0000,
+                              0x080C0000, 0x080E0000]
 
         if self.ser.isOpen():
             return
@@ -187,15 +189,35 @@ class FlashMemoryRW (object):
                 print "Bootloader GET unsuccessful: did not receive final ACK"
 
         print "GET command done."
-        self.bootREAD()
 
-    def bootREAD(self):
+    def bootREAD(self, args):
+        readMemAddr = 0
         if self.ser.isOpen() == False:
             print "Must initialize serial connection first."
             return
 
+        if len(args) == 1:
+            print "Must specify hex address or sector with -x or -s, respectively. \'bootread [-s|-x] [sector|addr]\'"
+        elif len(args) == 2:
+            print "Not enough arguments. \'bootread [-s|-x] [sector|addr]\'"
+        elif len(args) == 3:
+            if args[1] == "-s":
+                if ord(args[2]) >= 0 and ord(args[2]) <= 11:
+                    readMemAddr = self.FLASH_SECTORS[ord(args[2])]
+                else:
+                    print "Invalid sector number: ", args[2]
+                    return
+            elif args[1] == "-x":
+                if ord(args[2]) >= 0 and ord(args[2]) <= 0x1FFFC00F:
+                    readMemAddr = hex(args[2])
+                else:
+                    print "Invalid address: ", args[2]
+                    return
+        else:
+            print "Invalid number of arguments. \'bootread [-s|-x] [sector|addr]\'"
+
         self.txBuff = []
-        self.txBuff.append(self.WRMEM)
+        self.txBuff.append(self.RDMEM)
         self.txBuff.append(0xEE)
         self.ser.write(self.txBuff)
         self.txBuff = []
@@ -229,17 +251,17 @@ class FlashMemoryRW (object):
         printIndex = 0
         for i in xrange(len(self.txBuff)):
             if printIndex < 16:
-                print "%x" % ord(self.txBuff[i]),
+                print "%c" % ord(self.txBuff[i]),
                 printIndex += 1
             else:
                 print ""
-                print "%x" % ord(self.txBuff[i]),
+                print "%c" % ord(self.txBuff[i]),
                 printIndex = 1
 
-        print ""
+        print "READ command done"
 
-    def receiveData(self, dataLength):
-        return self.ser.read(dataLength)
+    def bootRDOUP(self):
+        pass
 
     def close(self):
         self.ser.close()
