@@ -79,11 +79,19 @@ class FlashMemoryRW (object):
         if self.ser.isOpen():
             print self.ser.name, " is now ready."
             self.ser.write([0x7F])
-
             self.rxBuff = []
-            self.rxBuff.append(ord(self.ser.read(1)))
+            tempvar = self.ser.read(1)
+
+            if len(tempvar) == 0:
+                print "No ACK received for connection timing setup, exiting now."
+                self.close()
+                return
+
+            self.rxBuff.append(ord(tempvar))
+
             if cmp(self.rxBuff, self.ACK) != 0:
                 print "Error with USART connection timing."
+                self.close()
                 return
             print self.ser.name, " is ready for bootloading."
             return True
@@ -120,6 +128,10 @@ class FlashMemoryRW (object):
         print "File " + file + " written successfully to STM32!"
 
     def bootGET(self):
+        if self.ser.isOpen() == False:
+            print "Must initialize serial connection first."
+            return
+
         self.ser.write([0x00])
         self.ser.write([0xFF])
 
@@ -153,7 +165,6 @@ class FlashMemoryRW (object):
             rxByte = ord(self.ser.read(1))
 
             if rxByte == self.ACK[0]:
-                print "========================="
                 print "Bootloader GET successful.\n"
                 print "Get command: 0x%02x" % self.GETCMD
                 print "Get Version and Read Protection Status: 0x%02x" % self.GETVER_RPS
@@ -172,8 +183,6 @@ class FlashMemoryRW (object):
                 print "Write Unprotect command: 0x%02x" % self.WRUP
                 print "Readout Protect command: 0x%02x" % self.RDOPR
                 print "Readout Unprotect command: 0x%02x" % self.RDOUP
-
-                return
             else:
                 print "Bootloader GET unsuccessful: did not receive final ACK"
 

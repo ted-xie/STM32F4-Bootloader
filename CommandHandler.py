@@ -1,5 +1,6 @@
 import os
 import FlashMemoryRW
+import HelpScreen
 
 class color:
    PURPLE = '\033[95m'
@@ -15,6 +16,7 @@ class color:
 
 class CommandHandler (object):
     def __init__(self):
+        self.generalHelper = HelpScreen.GeneralHelper()
         self.last5Commands = []
         self.numCommandsLogged = 0
         self.selectedFilePath = ""
@@ -202,7 +204,24 @@ class CommandHandler (object):
         return
 
     def helpHandler(self, args):
-        print "Help screen goes here"
+        if len(args) == 1:
+            print "Available commands:"
+            print " bootGet", "choose", "cd", "comterminate", "comread", "comsetup"
+            print " comwrite", "flash", "help", "history", "ls", "quit", "reset"
+            print "For help with a specific command, type \'?\' after it in the command line."
+            print "Example: 'comterminate ?\'"
+            print "Example: 'help ?'"
+        else:
+            if len(args) == 2:
+                if args[1] == "?":
+                    print "This is the help command, which displays all available commands"
+                    print "Parameters:"
+                    print "\'-m\': Return to the startup screen"
+                    print "\'-s\': Setup help screen"
+                if args[1] == "-m":
+                    self.generalHelper.__init__()
+                if args[1] == "-s":
+                    self.generalHelper.setupHelp()
 
 
     def historyHandler(self, args):
