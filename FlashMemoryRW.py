@@ -243,8 +243,8 @@ class FlashMemoryRW (object):
             print "No ACK received for boot READ: address already sent."
             return
 
-        self.ser.write([255]) # 128 kB - read the whole sector 11
-        self.ser.write([0]) # complement of 128 kB
+        self.ser.write([255])
+        self.ser.write([0])
 
         self.txBuff = self.ser.read(255)
 
